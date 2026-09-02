@@ -24,8 +24,8 @@ for url in "$@"; do
 		target_url="$url"
 	fi
 
-	# Opsi MPV untuk streaming cepat dan support full playlist navigation
-	MPV_OPTS="--ytdl-raw-options=yes-playlist= --demuxer-max-bytes=30MiB --demuxer-readahead-secs=15 --input-terminal=yes"
+	# Opsi MPV untuk streaming audio cepat dan full playlist navigation
+	MPV_OPTS="--ytdl-raw-options=yes-playlist= --cache=yes --cache-secs=30 --demuxer-max-bytes=30MiB --demuxer-readahead-secs=15 --demuxer-lavf-o=http_persistent=1,reconnect=1,reconnect_streamed=1,reconnect_delay_max=5 --input-terminal=yes"
 
 	if [ "${is_audio_only:-1}" -eq 1 ]; then
 		mpv --no-video --ytdl-format="${ytdl_pref:-251/140/bestaudio/best}" $MPV_OPTS $url_handler_opts "$target_url"

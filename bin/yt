@@ -606,12 +606,9 @@ def pad_left(n; num):
 
 # Invidious{{{
 refresh_inv_instances() {
-	print_info "Fetching list of healthy invidious instances ..." &&
-		# The pipeline does the following:
-		#   - Fetches the avaiable invidious instances
-		#   - Gets the one where the api is public
-		#   - Puts them in a list
-		curl -X GET -sSf "$instances_url" | jq -r '[.[]|select(.[1].api==true)|.[1].uri]|join("\n")' >"$instances_file"
+	[ -f "$instances_file" ] && return 0
+	# Fetch available healthy invidious instances with strict timeout
+	curl -X GET -sSf --connect-timeout 2 --max-time 4 "$instances_url" 2>/dev/null | jq -r '[.[]|select(.[1].api==true)|.[1].uri]|join("\n")' >"$instances_file" 2>/dev/null || touch "$instances_file"
 }
 
 get_invidious_instances() {
@@ -1619,57 +1616,51 @@ _youtube_channel_json() {
 
 scrape_yt() {
 	search=$1
-	[ "$search" = ":help" ] && print_info "Scrape youtube without invidious" && return 100
+	[ "$search" = ":help" ] && print_info "Scrape youtube with official InnerTube JSON API (Fast & Censorship Resilient)" && return 100
 	output_json_file=$2
-	_tmp_html="${session_temp_dir}/yt-search.html"
 	_tmp_json="${session_temp_dir}/yt-search.json"
 
-	printf "%s\n" "Scraping Youtube (with https://www.youtube.com) ($search)"
+	printf "%s\n" "Searching YouTube: $search"
 
-	_get_request "https://www.youtube.com/results" \
-		-G --data-urlencode "search_query=$search" \
-		-H "User-Agent: $4" \
-		-H 'Accept-Language: en-US,en;q=0.9' \
-		--compressed >"$_tmp_html" || exit "$?"
-	sed -n '/var *ytInitialData/,$p' <"$_tmp_html" |
-		tr -d '\n' |
-		sed -E ' s_^.*var ytInitialData ?=__ ; s_;</script>.*__ ;' >"$_tmp_json"
+	curl -s -X POST "https://www.youtube.com/youtubei/v1/search" \
+		-H "Content-Type: application/json" \
+		-H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+		--compressed \
+		--data-raw "{\"context\":{\"client\":{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\"}},\"query\":\"$search\"}" >"$_tmp_json" || exit "$?"
 
-	#gets a list of videos
+	#gets a list of videos and playlists
 	{
-		jq '[ .contents|
-	..|.videoRenderer? |
-	select(. !=null) |
-		{
-			scraper: "youtube_search",
-			url: "'"${yt_video_link_domain}"'/watch?v=\(.videoId)",
-			title: .title.runs[0].text,
-			channel: .longBylineText.runs[0].text,
-			duration:.lengthText.simpleText,
-			views: .shortViewCountText.simpleText,
-			date: .publishedTimeText.simpleText,
-			description: .detailedMetadataSnippets[0].snippetText.runs[0].text,
-			ID: .videoId,
-			thumbs: .thumbnail.thumbnails[0].url
-		}
-	]'
+		jq '[
+			.. | .videoRenderer? | select(. != null) |
+			{
+				scraper: "youtube_search",
+				url: "'"${yt_video_link_domain}"'/watch?v=\(.videoId)",
+				title: (.title.runs[0].text // .title.simpleText // "Unknown"),
+				channel: (.ownerText.runs[0].text // .longBylineText.runs[0].text // "Unknown"),
+				duration: (.lengthText.simpleText // "N/A"),
+				views: (.shortViewCountText.simpleText // .viewCountText.simpleText // "N/A"),
+				date: (.publishedTimeText.simpleText // "N/A"),
+				description: (.detailedMetadataSnippets[0].snippetText.runs[0].text // .descriptionSnippet.runs[0].text // ""),
+				ID: .videoId,
+				thumbs: (.thumbnail.thumbnails[0].url // "")
+			}
+		]'
 
-		jq '[ .contents|
-	..|.playlistRenderer? |
-	select(. !=null) |
-		{
-			scraper: "youtube_search",
-			url: "'"${yt_video_link_domain}"'/playlist?list=\(.videoId)",
-			title: "[Playlist] \(.title.simpleText)",
-			channel: .longBylineText.runs[0].text,
-			duration: "\(.videoCount) videos",
-			views: "playlist",
-			date: "playlist",
-			ID: .playlistId,
-			thumbs: .thumbnails[0].thumbnails[0].url,
-			action: "scrape type=invidious-playlist search='"${yt_video_link_domain}"'/playlist?list=\(.playlistId)"
-		}
-	]'
+		jq '[
+			.. | .playlistRenderer? | select(. != null) |
+			{
+				scraper: "youtube_search",
+				url: "'"${yt_video_link_domain}"'/playlist?list=\(.playlistId)",
+				title: "[Playlist] \((.title.simpleText // .title.runs[0].text // "Unknown"))",
+				channel: (.longBylineText.runs[0].text // .ownerText.runs[0].text // "Unknown"),
+				duration: "\(.videoCount // "0") videos",
+				views: "playlist",
+				date: "playlist",
+				ID: .playlistId,
+				thumbs: (.thumbnails[0].thumbnails[0].url // ""),
+				action: "scrape type=invidious-playlist search='"${yt_video_link_domain}"'/playlist?list=\(.playlistId)"
+			}
+		]'
 	} <"$_tmp_json" >>"$output_json_file"
 }
 
@@ -2052,8 +2043,8 @@ scrape_invidious_search() {
 	printf "%s\n" "$_ivs_cur_page" >"${session_temp_dir}/invidious_search-current-page"
 }
 
-scrape_youtube() { scrape_invidious_search "$@"; }
-scrape_Y() { scrape_invidious_search "$@"; }
+scrape_youtube() { scrape_yt "$@"; }
+scrape_Y() { scrape_yt "$@"; }
 
 scrape_next_page_invidious_search() {
 	# we can do this because _comment_file is overritten every time, meaning it will contain the latest scrape
