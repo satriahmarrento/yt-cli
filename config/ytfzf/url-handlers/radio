@@ -25,7 +25,7 @@ for url in "$@"; do
 	fi
 
 	# Opsi MPV untuk streaming audio cepat dan full playlist navigation
-	MPV_OPTS="--ytdl-raw-options=yes-playlist=,playlist-end=20 --no-sub --input-terminal=yes"
+	MPV_OPTS="--ytdl-raw-options=yes-playlist=,playlist-end=20 --no-sub --volume=50 --input-terminal=yes"
 
 	if [ "${is_audio_only:-1}" -eq 1 ]; then
 		mpv --no-video --ytdl-format="${ytdl_pref:-251/140/bestaudio/best}" $MPV_OPTS $url_handler_opts "$target_url"
