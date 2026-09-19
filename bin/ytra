@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Shortcut for YouTube Radio autoplay mode with auto-select (skips interactive picker)
+exec yt -m -u radio -a "$@"

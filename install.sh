@@ -19,7 +19,8 @@ fi
 # 2. Copy binaries
 cp bin/yt "$BIN_DIR/yt"
 cp bin/ytr "$BIN_DIR/ytr"
-chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr"
+cp bin/ytra "$BIN_DIR/ytra"
+chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr" "$BIN_DIR/ytra"
 
 # 3. Setup ytfzf configurations
 mkdir -p "$CONFIG_BASE/ytfzf/url-handlers"
@@ -36,3 +37,4 @@ echo ""
 echo "✅ YT CLI installed successfully!"
 echo "🚀 Standard Search: yt -m \"nama lagu\""
 echo "📻 Radio Autoplay:  ytr \"nama lagu\""
+echo "⚡ Instant Autoplay: ytra \"nama lagu\""
