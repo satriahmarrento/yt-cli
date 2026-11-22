@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Usage: ytm-dislike <video-id> [title] [artist]
+[ -n "$1" ] || { echo "usage: ytm-dislike <video-id> [title] [artist]" >&2; exit 2; }
+exec python3 "$HOME/.config/ytfzf/lib/ytm_preferences.py" log dislike "$@"

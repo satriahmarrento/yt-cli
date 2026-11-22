@@ -18,8 +18,8 @@ fi
 
 # 2. Copy binaries + preference engine
 mkdir -p "$CONFIG_BASE/ytfzf/lib"
-cp lib/ytm_preferences.py lib/ytm_radio.py "$CONFIG_BASE/ytfzf/lib/"
-chmod +x "$CONFIG_BASE/ytfzf/lib/ytm_preferences.py" "$CONFIG_BASE/ytfzf/lib/ytm_radio.py"
+cp lib/ytm_preferences.py lib/ytm_radio.py lib/feedback.sh "$CONFIG_BASE/ytfzf/lib/"
+chmod +x "$CONFIG_BASE/ytfzf/lib/ytm_preferences.py" "$CONFIG_BASE/ytfzf/lib/ytm_radio.py" "$CONFIG_BASE/ytfzf/lib/feedback.sh"
 cp bin/yt "$BIN_DIR/yt"
 cp bin/ytr "$BIN_DIR/ytr"
 cp bin/ytra "$BIN_DIR/ytra"
@@ -27,10 +27,10 @@ cp bin/yty "$BIN_DIR/yty"
 cp bin/ytyr "$BIN_DIR/ytyr"
 cp bin/ytya "$BIN_DIR/ytya"
 cp bin/ytra-smart "$BIN_DIR/ytra-smart"
-cp bin/ytm-like bin/ytm-skip bin/ytm-ban bin/ytm-reset bin/ytm-show "$BIN_DIR/"
+cp bin/ytm-like bin/ytm-dislike bin/ytm-skip bin/ytm-ban bin/ytm-reset bin/ytm-show "$BIN_DIR/"
 chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr" "$BIN_DIR/ytra" \
   "$BIN_DIR/yty" "$BIN_DIR/ytyr" "$BIN_DIR/ytya" \
-  "$BIN_DIR/ytra-smart" "$BIN_DIR/ytm-like" "$BIN_DIR/ytm-skip" "$BIN_DIR/ytm-ban" "$BIN_DIR/ytm-reset" "$BIN_DIR/ytm-show"
+  "$BIN_DIR/ytra-smart" "$BIN_DIR/ytm-like" "$BIN_DIR/ytm-dislike" "$BIN_DIR/ytm-skip" "$BIN_DIR/ytm-ban" "$BIN_DIR/ytm-reset" "$BIN_DIR/ytm-show"
 
 # 3. Setup ytfzf configurations
 mkdir -p "$CONFIG_BASE/ytfzf/url-handlers" "$CONFIG_BASE/ytfzf/scrapers"

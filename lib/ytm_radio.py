@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""Sequential YouTube Music radio with URL prefetch.
+"""YouTube Music radio: prefetched streams, titles on screen, like/dislike keys.
 
-Why this exists
----------------
-mpv's ytdl hook runs `yt-dlp` for every track. On Termux that costs ~4.8s per
-track, paid *before* audio starts, which is the "always buffering" symptom.
-Resolving the media URL ahead of time drops the per-track startup to ~1.4s.
+Why the prefetch: mpv's ytdl hook runs yt-dlp per track (~5s on Termux) before
+audio starts, which is the "always buffering" symptom. URLs are resolved ahead
+of time and appended to a single mpv over IPC instead.
 
-Design
-------
-* One mpv process for the whole session (keyboard shortcuts keep working).
-* mpv is driven over its IPC socket; upcoming tracks are appended with
-  `loadfile <url> append` while the current track plays.
-* A single-instance lock kills a stale radio so two songs never overlap.
+Keys (active while playing):
+    L  like        D  dislike        B  ban
 """
 
 import json
 import os
+import shlex
 import shutil
 import signal
 import socket
@@ -26,29 +21,31 @@ import threading
 import time
 
 CONFIG_DIR = os.path.expanduser("~/.config/ytfzf")
-HISTORY = os.path.join(CONFIG_DIR, "history.jsonl")
+LIB_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCK_PATH = os.path.join(CONFIG_DIR, "radio.lock")
 IPC_PATH = os.path.join(CONFIG_DIR, "radio.sock")
 CACHE_PATH = os.path.join(CONFIG_DIR, "url_cache.json")
-CACHE_TTL = 900  # seconds; googlevideo URLs live for hours but 403s creep in
+CURRENT_PATH = os.path.join(CONFIG_DIR, "current.json")
+KEYS_PATH = os.path.join(CONFIG_DIR, "radio-keys.conf")
+FEEDBACK = os.path.join(LIB_DIR, "feedback.sh")
 
+CACHE_TTL = 900
 CLIENT_VERSION = "1.20261117.06.00"
 USER_AGENT = ("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-
-# HLS first (reliable on mobile networks), DASH as fallback.
 FORMATS = ["234", "233", "251", "250", "249", "140"]
 PREFETCH_AHEAD = 3
 
 
-# ---------------------------------------------------------------- YTM queue
+# ------------------------------------------------------------------ YTM data
 
 def fetch_queue(seed_id, limit=20):
-    """Ask YouTube Music for the radio queue that belongs to this seed."""
+    """Return [{id,title,artist,duration}] starting with the seed."""
     try:
         from urllib.request import Request, urlopen
     except Exception:
         return []
+
     try:
         payload = {
             "context": {"client": {"clientName": "WEB_REMIX",
@@ -57,47 +54,51 @@ def fetch_queue(seed_id, limit=20):
             "videoId": seed_id,
             "playlistId": "RDAMVM" + seed_id,
         }
-        req = Request(
-            "https://music.youtube.com/youtubei/v1/next",
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-        )
+        req = Request("https://music.youtube.com/youtubei/v1/next",
+                      data=json.dumps(payload).encode(),
+                      headers={"Content-Type": "application/json",
+                               "User-Agent": USER_AGENT})
         with urlopen(req, timeout=20) as resp:
             data = json.load(resp)
     except Exception:
         return []
 
-    found = []
+    rows = []
 
     def walk(node):
         if isinstance(node, list):
             for item in node:
                 walk(item)
-        elif isinstance(node, dict):
-            panel = node.get("playlistPanelVideoRenderer")
-            if panel:
-                vid = panel.get("videoId")
-                runs = panel.get("title", {}).get("runs", []) or []
-                title = "".join(r.get("text", "") for r in runs)
-                if vid:
-                    found.append((vid, title))
-            for value in node.values():
-                walk(value)
+            return
+        if not isinstance(node, dict):
+            return
+        panel = node.get("playlistPanelVideoRenderer")
+        if panel:
+            vid = panel.get("videoId")
+            title = "".join(r.get("text", "") for r in (panel.get("title", {}).get("runs") or []))
+            artist = "".join(r.get("text", "") for r in
+                             (panel.get("shortBylineText", {}).get("runs") or []))
+            length = "".join(r.get("text", "") for r in
+                             (panel.get("lengthText", {}).get("runs") or []))
+            if vid:
+                rows.append({"id": vid, "title": title, "artist": artist,
+                             "duration": length})
+        for value in node.values():
+            walk(value)
 
     walk(data)
-    seen = {seed_id}
-    queue = []
-    for vid, title in found:
-        if vid in seen:
+    seen, queue = set(), []
+    for row in rows:
+        if row["id"] in seen:
             continue
-        seen.add(vid)
-        queue.append((vid, title))
+        seen.add(row["id"])
+        queue.append(row)
         if len(queue) >= limit:
             break
     return queue
 
 
-# ------------------------------------------------------------- media lookup
+# -------------------------------------------------------------- media lookup
 
 def _cache_load():
     try:
@@ -123,11 +124,7 @@ def _cache_store(video_id, url):
 
 
 def resolve_url(video_id):
-    """Return a playable direct URL, or None. HLS first, then DASH.
-
-    Direct URLs stay valid for hours, so a short-lived cache removes both the
-    ~5s extraction cost and the repeated YouTube calls that trigger 403s.
-    """
+    """Direct media URL. HLS first (reliable on mobile), DASH as fallback."""
     cached = _cache_load().get(video_id)
     if cached and time.time() - cached.get("ts", 0) < CACHE_TTL:
         return cached.get("url")
@@ -148,64 +145,126 @@ def resolve_url(video_id):
     return None
 
 
-# ------------------------------------------------------------------- mpv IPC
+# --------------------------------------------------------------------- mpv
+
+def build_keys_conf():
+    """Merge the user's key bindings with our feedback keys."""
+    lines = []
+    user_conf = os.path.expanduser("~/.config/mpv/input.conf")
+    if os.path.exists(user_conf):
+        try:
+            with open(user_conf, "r", encoding="utf-8") as handle:
+                lines.append(handle.read())
+        except Exception:
+            pass
+    if os.path.exists(FEEDBACK):
+        quoted = shlex.quote(FEEDBACK)
+        lines.append("\n# ytm radio feedback (y=like x=dislike b=ban)\n")
+        lines.append(f"y run {quoted} like\n")
+        lines.append(f"x run {quoted} dislike\n")
+        lines.append(f"b run {quoted} ban\n")
+    try:
+        with open(KEYS_PATH, "w", encoding="utf-8") as handle:
+            handle.write("".join(lines))
+    except Exception:
+        return None
+    return KEYS_PATH
+
 
 class Mpv:
-    def __init__(self, first_url):
+    def __init__(self, keys_conf):
         env_ao = os.environ.get("YTR_AO") or ""
-        self.proc = None
-        self.sock = None
-        cmd = [
-            shutil.which("mpv") or "mpv",
-            "--no-video",
-            "--no-resume-playback",
-            "--volume=50",
-            "--cache=yes",
-            "--cache-secs=5",
-            "--demuxer-readahead-secs=10",
-            "--network-timeout=20",
-            "--input-ipc-server=" + IPC_PATH,
-            "--input-terminal=yes",
-            "--term-status-msg=",
-            first_url,
-        ]
-        if env_ao:
-            cmd.insert(1, "--ao=" + env_ao)
         if os.path.exists(IPC_PATH):
             try:
                 os.unlink(IPC_PATH)
             except OSError:
                 pass
+
+        cmd = [shutil.which("mpv") or "mpv",
+               "--no-video", "--idle=yes", "--no-resume-playback",
+               "--volume=50", "--cache=yes", "--cache-secs=5",
+               "--demuxer-readahead-secs=10", "--network-timeout=20",
+               "--input-ipc-server=" + IPC_PATH, "--input-terminal=yes",
+               "--term-playing-msg=▶ ${media-title}"]
+        if keys_conf:
+            cmd.append("--input-conf=" + keys_conf)
+        if env_ao:
+            cmd.insert(1, "--ao=" + env_ao)
+
         self.proc = subprocess.Popen(cmd)
+        self.lock = threading.Lock()
         _write_lock(os.getpid(), self.proc.pid)
 
-        for _ in range(50):  # wait up to ~5s for the socket
+        for _ in range(50):
             if os.path.exists(IPC_PATH):
                 break
             time.sleep(0.1)
-        try:
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect(IPC_PATH)
-        except OSError:
-            self.sock = None
+        self.sock = self._connect()
+
+    @staticmethod
+    def _connect(timeout=10.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.settimeout(5)
+                sock.connect(IPC_PATH)
+                return sock
+            except OSError:
+                time.sleep(0.2)
+        return None
 
     def command(self, *args):
-        if not self.sock:
+        return self._send(self.sock, *args)
+
+    def _send(self, sock, *args):
+        if sock is None:
             return False
         try:
-            self.sock.sendall((json.dumps({"command": list(args)}) + "\n").encode())
+            with self.lock:
+                sock.sendall((json.dumps({"command": list(args)}) + "\n").encode())
             return True
         except OSError:
             return False
 
-    def append(self, url):
-        return self.command("loadfile", url, "append")
+    def query(self, sock, prop):
+        if sock is None:
+            return None
+        try:
+            with self.lock:
+                sock.sendall((json.dumps({"command": ["get_property", prop],
+                                          "request_id": 1}) + "\n").encode())
+                deadline = time.time() + 5
+                buf = b""
+                while time.time() < deadline:
+                    chunk = sock.recv(65536)
+                    if not chunk:
+                        return None
+                    buf += chunk
+                    while b"\n" in buf:
+                        line, buf = buf.split(b"\n", 1)
+                        try:
+                            msg = json.loads(line.decode())
+                        except Exception:
+                            continue
+                        if msg.get("request_id") == 1:
+                            return msg.get("data")
+        except Exception:
+            return None
+        return None
+
+    def play(self, url, label):
+        return self.command("loadfile", url, "replace", -1,
+                            {"force-media-title": label})
+
+    def append(self, url, label):
+        return self.command("loadfile", url, "append", -1,
+                            {"force-media-title": label})
 
     def wait(self):
         return self.proc.wait()
 
     def terminate(self):
-        """Kill mpv so it never outlives the wrapper (the double-audio bug)."""
         if self.proc.poll() is not None:
             return
         try:
@@ -218,15 +277,13 @@ class Mpv:
                 pass
 
 
-# -------------------------------------------------------------- bookkeeping
+# ------------------------------------------------------------- bookkeeping
 
-def log_event(kind, video_id, title=""):
+def _write_lock(wrapper_pid, mpv_pid):
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(HISTORY, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"ts": int(time.time()), "kind": kind,
-                                     "id": video_id, "title": title},
-                                    ensure_ascii=False) + "\n")
+        with open(LOCK_PATH, "w", encoding="utf-8") as handle:
+            json.dump({"wrapper": wrapper_pid, "mpv": mpv_pid}, handle)
     except Exception:
         pass
 
@@ -251,11 +308,6 @@ def _kill_pid(pid):
 
 
 def _kill_stale_mpv():
-    """Kill any mpv still attached to this radio's IPC socket.
-
-    Lock data can go stale (wrapper SIGKILLed, killed mid-start), and an
-    orphaned mpv is exactly what makes two songs play at once.
-    """
     marker = IPC_PATH.encode()
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
@@ -273,18 +325,12 @@ def _kill_stale_mpv():
 
 
 def acquire_single_instance():
-    """Stop a radio left running by an earlier command (the double-audio bug).
-
-    The previous run may have died without cleaning up mpv, so both pids are
-    tracked and terminated before the new session starts.
-    """
     old = {}
     try:
         with open(LOCK_PATH, "r", encoding="utf-8") as handle:
             raw = (handle.read() or "").strip()
         if raw:
             parsed = json.loads(raw)
-            # Older lock files stored a bare pid.
             old = parsed if isinstance(parsed, dict) else {"wrapper": parsed}
     except Exception:
         old = {}
@@ -296,20 +342,38 @@ def acquire_single_instance():
     _write_lock(os.getpid(), None)
 
 
-def _write_lock(wrapper_pid, mpv_pid):
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(LOCK_PATH, "w", encoding="utf-8") as handle:
-            json.dump({"wrapper": wrapper_pid, "mpv": mpv_pid}, handle)
-    except Exception:
-        pass
-
-
 def release_single_instance():
     try:
         os.unlink(LOCK_PATH)
     except OSError:
         pass
+
+
+def write_current(track):
+    try:
+        tmp = CURRENT_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(track, handle, ensure_ascii=False)
+        os.replace(tmp, CURRENT_PATH)
+    except Exception:
+        pass
+
+
+def log_play(track):
+    try:
+        subprocess.run([sys.executable, os.path.join(LIB_DIR, "ytm_preferences.py"),
+                        "log", "play", track["id"], track.get("title", ""),
+                        track.get("artist", "")],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=10)
+    except Exception:
+        pass
+
+
+def label_for(track):
+    title = track.get("title") or track["id"]
+    artist = track.get("artist") or ""
+    return f"{title} — {artist}" if artist else title
 
 
 # --------------------------------------------------------------------- main
@@ -321,7 +385,6 @@ def main():
 
     seed_id = sys.argv[1]
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-
     player = None
 
     def _shutdown(signum, frame):
@@ -335,47 +398,80 @@ def main():
 
     acquire_single_instance()
     try:
-        first_url = resolve_url(seed_id)
+        queue = fetch_queue(seed_id, limit) or [{"id": seed_id, "title": "",
+                                                 "artist": "", "duration": ""}]
+        if queue[0]["id"] != seed_id:
+            queue.insert(0, {"id": seed_id, "title": "", "artist": "", "duration": ""})
+
+        first = queue[0]
+        first_url = resolve_url(first["id"])
         if not first_url:
             print("Gagal resolve stream.", file=sys.stderr)
             return 1
 
-        player = Mpv(first_url)
-        log_event("played", seed_id)
+        player = Mpv(build_keys_conf())
+        if player.sock is None:
+            print("Gagal terhubung ke mpv.", file=sys.stderr)
+            return 1
 
-        queue = fetch_queue(seed_id, limit)
-        if not queue and os.environ.get("YTR_DEBUG"):
-            print("queue kosong, main satu lagu saja", file=sys.stderr)
+        print("Tekan: y = like   x = dislike   b = ban   q = keluar", flush=True)
+        player.play(first_url, label_for(first))
+        entries = [first]
 
-        # Resolve ahead in a worker so playback never waits on yt-dlp.
+        # Prefetch ahead so a track never starts by waiting on yt-dlp.
+        ready = []
+        ready_lock = threading.Lock()
+
         def prefetch():
-            pending = list(queue)
-            while pending and player.proc.poll() is None:
-                while len(_ready) >= PREFETCH_AHEAD and player.proc.poll() is None:
+            for track in queue[1:]:
+                if player.proc.poll() is not None:
+                    break
+                while True:
+                    with ready_lock:
+                        pending = len(ready)
+                    if pending < PREFETCH_AHEAD or player.proc.poll() is not None:
+                        break
                     time.sleep(0.2)
-                vid, title = pending.pop(0)
-                url = resolve_url(vid)
+                url = resolve_url(track["id"])
                 if url:
-                    _ready.append((vid, title, url))
-
-        _ready = []
-        worker = threading.Thread(target=prefetch, daemon=True)
+                    with ready_lock:
+                        ready.append((track, url))
 
         def feeder():
-            worker.start()
-            appended = 0
+            threading.Thread(target=prefetch, daemon=True).start()
+            sent = 0
             while player.proc.poll() is None:
-                if _ready:
-                    vid, title, url = _ready.pop(0)
-                    if player.append(url):
-                        appended += 1
-                        log_event("played", vid, title)
-                else:
-                    time.sleep(0.3)
-                if not worker.is_alive() and not _ready and appended >= len(queue):
+                item = None
+                with ready_lock:
+                    if ready:
+                        item = ready.pop(0)
+                if item is None:
+                    time.sleep(0.2)
+                    continue
+                track, url = item
+                if player.append(url, label_for(track)):
+                    entries.append(track)
+                    sent += 1
+                if sent >= len(queue) - 1:
                     break
+            # Everything queued: stay alive while mpv plays the rest.
 
         threading.Thread(target=feeder, daemon=True).start()
+
+        def monitor():
+            sock = Mpv._connect(timeout=20)
+            last = None
+            while player.proc.poll() is None:
+                pos = player.query(sock, "playlist-pos")
+                if isinstance(pos, int) and pos != last and 0 <= pos < len(entries):
+                    last = pos
+                    track = entries[pos]
+                    write_current(track)
+                    log_play(track)
+                time.sleep(0.4)
+
+        threading.Thread(target=monitor, daemon=True).start()
+
         code = player.wait()
         return code or 0
     except SystemExit:
