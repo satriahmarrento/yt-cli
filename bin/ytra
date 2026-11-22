@@ -1,3 +1,10 @@
 #!/usr/bin/env sh
-# YouTube Music instant Radio autoplay (default source); use ytya for regular YouTube
-exec yt -m -u radio -a "$@"
+# Smart instant radio: ranked YTM seed with history and preference feedback.
+ENGINE="$HOME/yt-cli/lib/ytm_preferences.py"
+query="$*"
+[ -n "$query" ] || { echo "usage: ytra <song query>" >&2; exit 2; }
+seed=$(python3 "$ENGINE" seed "$query")
+if [ -z "$seed" ]; then
+    exec yt -m -u radio -a "$@"
+fi
+exec yt -m -u radio -a "https://music.youtube.com/watch?v=$seed"

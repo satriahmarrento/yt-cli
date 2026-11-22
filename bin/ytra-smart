@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+set -e
+ENGINE="$HOME/yt-cli/lib/ytm_preferences.py"
+query="$*"
+[ -n "$query" ] || exit 2
+seed=$(python3 "$ENGINE" seed "$query")
+exec yt -m -u radio -a "https://music.youtube.com/watch?v=$seed"

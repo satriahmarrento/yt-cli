@@ -6,7 +6,8 @@ Pemutar YouTube Music / YouTube Audio/Video di terminal dengan fitur **Radio / M
 - **YouTube Music Default**: Hasil pencarian lagu/resmi lebih relevan (bukan video random).
 - **Audio Only Mode (`-m`)**: Streaming musik hemat kuota & tanpa jendela video.
 - **Spotify-Style Autoplay (`ytr`)**: Pilih 1 lagu, otomatis putar 20 lagu rekomendasi (*related tracks*) tanpa henti.
-- **Instant Autoplay (`ytra`)**: Putar langsung hasil pertama tanpa fzf picker.
+- **Smart Instant Autoplay (`ytra`)**: Pilih seed secara weighted random dari hasil YTM, hindari lagu/artist yang sering diulang, dan belajar dari like/skip/ban.
+- **Data Lokal**: Preferensi disimpan di `~/.config/ytfzf/preferences.json`; riwayat lengkap disimpan di `history.jsonl`.
 - **Low-Latency Mix**: Dibatasi 20 playlist-end & no-sub untuk start instan (< 2 detik).
 - **Kontrol Penuh Keyboard**: Navigasi lagu berikutnya/sebelumnya, volume, dan pause langsung di terminal.
 - **Kompatibel Termux (Android)**: 100% jalan di HP Android melalui Termux.
@@ -25,8 +26,14 @@ bash install.sh
 # 1. Mode Radio Autoplay (Pilih lagu via menu):
 ytr "coldplay yellow"
 
-# 2. Mode Radio Instan (Auto-select lagu pertama, tanpa menu):
+# 2. Mode Radio Instan Cerdas (weighted seed, belajar dari history):
 ytra "coldplay yellow"
+
+# Feedback setelah mendengar lagu (id = video ID dari URL YouTube)
+ytm-like 9qnqYL0eNNI "Yellow" "Coldplay"
+ytm-skip VIDEO_ID "Judul" "Artist"
+ytm-ban VIDEO_ID "Judul" "Artist"
+ytm-reset   # hapus preferensi
 
 # 3. Mode Pencarian Standar (Audio Only):
 yt -m "lofi hip hop"

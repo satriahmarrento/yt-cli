@@ -17,14 +17,20 @@ else
 fi
 
 # 2. Copy binaries
+mkdir -p "$HOME_DIR/yt-cli/lib"
+cp lib/ytm_preferences.py "$HOME_DIR/yt-cli/lib/ytm_preferences.py"
+chmod +x "$HOME_DIR/yt-cli/lib/ytm_preferences.py"
 cp bin/yt "$BIN_DIR/yt"
 cp bin/ytr "$BIN_DIR/ytr"
 cp bin/ytra "$BIN_DIR/ytra"
 cp bin/yty "$BIN_DIR/yty"
 cp bin/ytyr "$BIN_DIR/ytyr"
 cp bin/ytya "$BIN_DIR/ytya"
+cp bin/ytra-smart "$BIN_DIR/ytra-smart"
+cp bin/ytm-like bin/ytm-skip bin/ytm-ban bin/ytm-reset bin/ytm-show "$BIN_DIR/"
 chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr" "$BIN_DIR/ytra" \
-    "$BIN_DIR/yty" "$BIN_DIR/ytyr" "$BIN_DIR/ytya"
+  "$BIN_DIR/yty" "$BIN_DIR/ytyr" "$BIN_DIR/ytya" \
+  "$BIN_DIR/ytra-smart" "$BIN_DIR/ytm-like" "$BIN_DIR/ytm-skip" "$BIN_DIR/ytm-ban" "$BIN_DIR/ytm-reset" "$BIN_DIR/ytm-show"
 
 # 3. Setup ytfzf configurations
 mkdir -p "$CONFIG_BASE/ytfzf/url-handlers" "$CONFIG_BASE/ytfzf/scrapers"
