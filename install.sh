@@ -16,10 +16,10 @@ else
     mkdir -p "$BIN_DIR"
 fi
 
-# 2. Copy binaries
-mkdir -p "$HOME_DIR/yt-cli/lib"
-cp lib/ytm_preferences.py "$HOME_DIR/yt-cli/lib/ytm_preferences.py"
-chmod +x "$HOME_DIR/yt-cli/lib/ytm_preferences.py"
+# 2. Copy binaries + preference engine
+mkdir -p "$CONFIG_BASE/ytfzf/lib"
+cp lib/ytm_preferences.py lib/ytm_radio.py "$CONFIG_BASE/ytfzf/lib/"
+chmod +x "$CONFIG_BASE/ytfzf/lib/ytm_preferences.py" "$CONFIG_BASE/ytfzf/lib/ytm_radio.py"
 cp bin/yt "$BIN_DIR/yt"
 cp bin/ytr "$BIN_DIR/ytr"
 cp bin/ytra "$BIN_DIR/ytra"

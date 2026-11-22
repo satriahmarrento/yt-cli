@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-exec python3 "$HOME/yt-cli/lib/ytm_preferences.py" show
+exec python3 "$HOME/.config/ytfzf/lib/ytm_preferences.py" show

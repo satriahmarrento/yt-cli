@@ -1,10 +1,14 @@
 #!/usr/bin/env sh
-# Smart instant radio: ranked YTM seed with history and preference feedback.
-ENGINE="$HOME/yt-cli/lib/ytm_preferences.py"
+# Smart YouTube Music radio: ranked seed + prefetched stream URLs.
+# The preference engine picks the seed; the radio prefetches URLs so mpv never
+# waits on yt-dlp mid-session.
+ENGINE="$HOME/.config/ytfzf/lib/ytm_preferences.py"
+RADIO="$HOME/.config/ytfzf/lib/ytm_radio.py"
+
 query="$*"
-[ -n "$query" ] || { echo "usage: ytra <song query>" >&2; exit 2; }
-seed=$(python3 "$ENGINE" seed "$query")
-if [ -z "$seed" ]; then
-    exec yt -m -u radio -a "$@"
-fi
-exec yt -m -u radio -a "https://music.youtube.com/watch?v=$seed"
+[ -n "$query" ] || { echo "usage: ytra <judul lagu>" >&2; exit 2; }
+
+seed=$(python3 "$ENGINE" seed "$query") || exit 1
+[ -n "$seed" ] || { echo "Tidak ada hasil untuk: $query" >&2; exit 1; }
+
+exec python3 "$RADIO" "$seed" 20

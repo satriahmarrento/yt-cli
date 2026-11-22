@@ -29,8 +29,11 @@ for url in "$@"; do
 		target_url="$url"
 	fi
 
-	# Opsi MPV untuk streaming audio cepat, reconnect, dan full playlist navigation
-	MPV_OPTS="--ytdl-raw-options=yes-playlist=,playlist-end=20 --no-sub --volume=50 --input-terminal=yes --network-timeout=30 --cache=yes --cache-secs=15"
+	# Opsi MPV untuk streaming audio cepat, reconnect, dan full playlist navigation.
+	# Cache 60s absorbs short mobile-network stalls; without it the HLS cache
+	# stays at a few seconds and every hiccup turns into "Buffering...".
+	# Keep reconnect=1 but never reconnect_streamed=1 for HLS (see mpv.conf).
+	MPV_OPTS="--ytdl-raw-options=yes-playlist=,playlist-end=20 --no-sub --volume=50 --input-terminal=yes --network-timeout=30 --cache=yes --cache-secs=60 --demuxer-readahead-secs=60 --audio-buffer=1 --no-resume-playback --demuxer-lavf-o=http_persistent=1,reconnect=1,reconnect_delay_max=5"
 
 	if [ "${is_audio_only:-1}" -eq 1 ]; then
 		mpv --no-video --ytdl-format="${ytdl_pref:-251/140/bestaudio/best}" $MPV_OPTS $url_handler_opts "$target_url"

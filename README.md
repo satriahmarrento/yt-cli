@@ -8,7 +8,8 @@ Pemutar YouTube Music / YouTube Audio/Video di terminal dengan fitur **Radio / M
 - **Spotify-Style Autoplay (`ytr`)**: Pilih 1 lagu, otomatis putar 20 lagu rekomendasi (*related tracks*) tanpa henti.
 - **Smart Instant Autoplay (`ytra`)**: Pilih seed secara weighted random dari hasil YTM, hindari lagu/artist yang sering diulang, dan belajar dari like/skip/ban.
 - **Data Lokal**: Preferensi disimpan di `~/.config/ytfzf/preferences.json`; riwayat lengkap disimpan di `history.jsonl`.
-- **Low-Latency Mix**: Dibatasi 20 playlist-end & no-sub untuk start instan (< 2 detik).
+- **Low-Latency Mix**: URL stream di-resolve di depan (prefetch) dan di-cache, jadi jeda antar-lagu ~1.4 detik, bukan ~6 detik.
+- **Single Player**: Satu proses mpv per sesi; menjalankan `ytra` lagi otomatis mematikan sesi lama, jadi tidak ada dua lagu berbunyi bersamaan.
 - **Kontrol Penuh Keyboard**: Navigasi lagu berikutnya/sebelumnya, volume, dan pause langsung di terminal.
 - **Kompatibel Termux (Android)**: 100% jalan di HP Android melalui Termux.
 
