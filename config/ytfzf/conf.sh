@@ -8,5 +8,7 @@ scrape="ytmusic"
 yt_video_link_domain="https://www.youtube.com"
 
 # Prefer direct fast audio streams (Opus 251 / AAC 140 / bestaudio)
-audio_pref="251/140/bestaudio/best"
-ytdl_pref="251/140/bestaudio/best"
+# Prefer YouTube's HLS audio formats. Direct DASH URLs can intermittently
+# return 403 on Android/Termux; HLS lets ffmpeg reconnect and avoids that path.
+audio_pref="234/233/140/249/250/251/bestaudio/best"
+ytdl_pref="234/233/140/249/250/251/bestaudio/best"
