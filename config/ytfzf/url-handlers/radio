@@ -18,8 +18,13 @@ for url in "$@"; do
 	esac
 
 	if [ -n "$video_id" ]; then
-		# YouTube Mix playlist parameter
-		target_url="https://www.youtube.com/watch?v=${video_id}&list=RD${video_id}"
+		# YouTube Music results use the YTM radio mix (RDAMVM);
+		# regular YouTube results keep the standard RD mix.
+		case "$url" in
+			*music.youtube.com*) list_id="RDAMVM${video_id}" ;;
+			*) list_id="RD${video_id}" ;;
+		esac
+		target_url="https://www.youtube.com/watch?v=${video_id}&list=${list_id}"
 	else
 		target_url="$url"
 	fi

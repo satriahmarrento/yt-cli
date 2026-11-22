@@ -1,8 +1,9 @@
-# 🎵 YT CLI (Terminal YouTube & Radio Player)
+# 🎵 YT CLI (Terminal YouTube Music & Radio Player)
 
-Pemutar YouTube Audio/Video di terminal dengan fitur **YouTube Radio / Mix Autoplay** dan optimasi *low-latency streaming*.
+Pemutar YouTube Music / YouTube Audio/Video di terminal dengan fitur **Radio / Mix Autoplay** dan optimasi *low-latency streaming*. Sumber pencarian default adalah **YouTube Music**, dengan fallback ke YouTube biasa lewat perintah `yty*`.
 
 ## ✨ Fitur
+- **YouTube Music Default**: Hasil pencarian lagu/resmi lebih relevan (bukan video random).
 - **Audio Only Mode (`-m`)**: Streaming musik hemat kuota & tanpa jendela video.
 - **Spotify-Style Autoplay (`ytr`)**: Pilih 1 lagu, otomatis putar 20 lagu rekomendasi (*related tracks*) tanpa henti.
 - **Instant Autoplay (`ytra`)**: Putar langsung hasil pertama tanpa fzf picker.
@@ -19,6 +20,8 @@ bash install.sh
 
 ## 🎮 Penggunaan
 ```bash
+# Sumber default = YouTube Music
+
 # 1. Mode Radio Autoplay (Pilih lagu via menu):
 ytr "coldplay yellow"
 
@@ -28,9 +31,17 @@ ytra "coldplay yellow"
 # 3. Mode Pencarian Standar (Audio Only):
 yt -m "lofi hip hop"
 
-# 3. Pilih Banyak Lagu Sekaligus (Queue):
+# 4. Pilih Banyak Lagu Sekaligus (Queue):
 yt -m "queen"  # Gunakan tombol TAB untuk centang beberapa lagu, lalu ENTER
+
+# 5. Pakai YouTube biasa (bukan YouTube Music):
+yty "coldplay yellow"
+ytyr "coldplay yellow"
+ytya "coldplay yellow"
 ```
+
+> **Ganti sumber default:** edit `~/.config/ytfzf/conf.sh` lalu ubah
+> `scrape="ytmusic"` menjadi `scrape="yt"` untuk kembali sepenuhnya ke YouTube.
 
 ## ⌨️ Kontrol Tombol (Keyboard)
 | Tombol | Fungsi |

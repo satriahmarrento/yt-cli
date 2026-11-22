@@ -1,3 +1,3 @@
 #!/usr/bin/env sh
-# Shortcut for YouTube Radio autoplay mode with auto-select (skips interactive picker)
+# YouTube Music instant Radio autoplay (default source); use ytya for regular YouTube
 exec yt -m -u radio -a "$@"

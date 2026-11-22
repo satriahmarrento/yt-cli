@@ -20,13 +20,18 @@ fi
 cp bin/yt "$BIN_DIR/yt"
 cp bin/ytr "$BIN_DIR/ytr"
 cp bin/ytra "$BIN_DIR/ytra"
-chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr" "$BIN_DIR/ytra"
+cp bin/yty "$BIN_DIR/yty"
+cp bin/ytyr "$BIN_DIR/ytyr"
+cp bin/ytya "$BIN_DIR/ytya"
+chmod +x "$BIN_DIR/yt" "$BIN_DIR/ytr" "$BIN_DIR/ytra" \
+    "$BIN_DIR/yty" "$BIN_DIR/ytyr" "$BIN_DIR/ytya"
 
 # 3. Setup ytfzf configurations
-mkdir -p "$CONFIG_BASE/ytfzf/url-handlers"
+mkdir -p "$CONFIG_BASE/ytfzf/url-handlers" "$CONFIG_BASE/ytfzf/scrapers"
 cp config/ytfzf/conf.sh "$CONFIG_BASE/ytfzf/conf.sh"
 cp config/ytfzf/url-handlers/radio "$CONFIG_BASE/ytfzf/url-handlers/radio"
-chmod +x "$CONFIG_BASE/ytfzf/url-handlers/radio"
+cp config/ytfzf/scrapers/ytmusic "$CONFIG_BASE/ytfzf/scrapers/ytmusic"
+chmod +x "$CONFIG_BASE/ytfzf/url-handlers/radio" "$CONFIG_BASE/ytfzf/scrapers/ytmusic"
 
 # 4. Setup mpv configurations
 mkdir -p "$CONFIG_BASE/mpv"
