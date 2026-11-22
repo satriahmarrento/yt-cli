@@ -1,7 +1,0 @@
-#!/usr/bin/env sh
-ENGINE="$HOME/yt-cli/lib/ytm_preferences.py"
-RADIO="$HOME/yt-cli/lib/ytm_radio.py"
-query="$*"
-[ -n "$query" ] || exit 2
-seed=$(python3 "$ENGINE" seed "$query") || exit 1
-exec python3 "$RADIO" "$seed" 20
