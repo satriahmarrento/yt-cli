@@ -1,14 +1,32 @@
 #!/usr/bin/env sh
-# Smart YouTube Music radio: ranked seed + prefetched stream URLs.
-# The preference engine picks the seed; the radio prefetches URLs so mpv never
-# waits on yt-dlp mid-session.
+# Exact-first YouTube Music radio:
+# 1. A song/title query plays the first YTM match immediately.
+# 2. It then uses that track as the seed for shuffled recommendations.
+# 3. Genre/mood queries keep the smart-ranked seed behavior.
 ENGINE="$HOME/.config/ytfzf/lib/ytm_preferences.py"
 RADIO="$HOME/.config/ytfzf/lib/ytm_radio.py"
 
 query="$*"
 [ -n "$query" ] || { echo "usage: ytra <judul lagu>" >&2; exit 2; }
 
-seed=$(python3 "$ENGINE" seed "$query") || exit 1
-[ -n "$seed" ] || { echo "Tidak ada hasil untuk: $query" >&2; exit 1; }
+# Broad mood/genre inputs should still be shuffled, not pinned to the first row.
+case "$query" in
+  lofi|"lofi "*|chill|"chill "*|hiphop|"hip hop"*|rock|"rock "*|jazz|"jazz "*|pop|"pop "*|rap|"rap "*|mood|"mood "*|mix|"mix "*)
+    seed=$(python3 "$ENGINE" seed "$query") || exit 1
+    ;;
+  *)
+    first=$(python3 "$ENGINE" exact-first "$query") || exit 1
+    [ -n "$first" ] || { echo "Tidak ada hasil untuk: $query" >&2; exit 1; }
+    seed=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["id"])' "$first") || exit 1
+    python3 - "$first" <<'PY'
+import json, os, sys
+row=json.loads(sys.argv[1])
+p=os.path.expanduser("~/.config/ytfzf/current.json")
+os.makedirs(os.path.dirname(p),exist_ok=True)
+with open(p,"w",encoding="utf-8") as f:
+    json.dump({"id":row["id"],"title":row["title"],"artist":row["artist"],"duration":""},f,ensure_ascii=False)
+PY
+    ;;
+esac
 
 exec python3 "$RADIO" "$seed" 20

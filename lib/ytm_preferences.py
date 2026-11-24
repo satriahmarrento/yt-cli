@@ -283,6 +283,20 @@ def main(argv):
         print(seed)
         return 0
 
+    if command == "exact-first":
+        query = argv[2] if len(argv) > 2 else ""
+        if not query:
+            return 1
+        try:
+            rows = search(query)
+        except Exception:
+            return 1
+        if not rows:
+            return 1
+        row = rows[0]
+        print(json.dumps(row, ensure_ascii=False))
+        return 0
+
     if command == "log":
         if len(argv) < 3:
             return 2

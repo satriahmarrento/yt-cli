@@ -400,10 +400,24 @@ def main():
     try:
         queue = fetch_queue(seed_id, limit) or [{"id": seed_id, "title": "",
                                                  "artist": "", "duration": ""}]
-        if queue[0]["id"] != seed_id:
-            queue.insert(0, {"id": seed_id, "title": "", "artist": "", "duration": ""})
 
-        first = queue[0]
+        # Exact-first mode: do not replace the explicit search hit with the radio
+        # winner.  Preserve YTM metadata for the title shown on screen.
+        first = {"id": seed_id, "title": "", "artist": "", "duration": ""}
+        try:
+            with open(CURRENT_PATH, "r", encoding="utf-8") as handle:
+                current = json.load(handle)
+            if current.get("id") == seed_id:
+                first = current
+        except Exception:
+            pass
+
+        queue = [row for row in queue if row.get("id") != seed_id]
+        queue.insert(0, first)
+
+        if len(queue) > 1:
+            # Remove seed/near-duplicates from the shuffle and keep it first.
+            queue = [first] + [row for row in queue[1:] if row.get("id") != seed_id][:limit - 1]
         first_url = resolve_url(first["id"])
         if not first_url:
             print("Gagal resolve stream.", file=sys.stderr)
